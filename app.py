@@ -1,127 +1,47 @@
-import re
 import streamlit as st
-import yt_dlp
-
-
-def clean_youtube_url(url: str) -> str:
-    """Membersihkan URL dari spasi, tanda kutip, dan mengambil format standar YouTube."""
-    if not url:
-        return ""
-
-    # 1. Hapus spasi dan tanda kutip pembungkus
-    cleaned = url.strip().strip("'\"").strip()
-
-    # 2. Ekstrak Video ID 11 karakter menggunakan Regex
-    youtube_regex = (
-        r"(https?://)?(www\.)?"
-        r"(youtube\.com/watch\?v=|youtu\.be/|youtube\.com/embed/)"
-        r"([a-zA-Z0-9_-]{11})"
-    )
-
-    match = re.search(youtube_regex, cleaned)
-    if match:
-        video_id = match.group(4)
-        return f"https://www.youtube.com/watch?v={video_id}"
-
-    return cleaned
-
-
-# --- UI Streamlit ---
-url_input = st.text_input("Masukkan Link YouTube:")
-
-if st.button("Proses Video"):
-    # Pakai fungsi pembersih sebelum diproses yt-dlp
-    cleaned_url = clean_youtube_url(url_input)
-
-    if not cleaned_url:
-        st.error("Silakan masukkan URL YouTube yang valid.")
-    else:
-        ydl_opts = {
-            "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
-            "quiet": True,
-            "no_warnings": True,
-        }
-
-        try:
-            with st.spinner("Memproses info video..."):
-                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    info = ydl.extract_info(cleaned_url, download=False)
-                    st.success(f"Berhasil memuat: **{info.get('title')}**")
-
-        except Exception as e:
-            st.error(f"Gagal memproses: {e}")import re
-import streamlit as st
-import yt_dlp
-
-
-def clean_youtube_url(url: str) -> str:
-    """Membersihkan URL dari spasi, tanda kutip, dan mengambil format standar YouTube."""
-    if not url:
-        return ""
-
-    # 1. Hapus spasi dan tanda kutip pembungkus
-    cleaned = url.strip().strip("'\"").strip()
-
-    # 2. Ekstrak Video ID 11 karakter menggunakan Regex
-    youtube_regex = (
-        r"(https?://)?(www\.)?"
-        r"(youtube\.com/watch\?v=|youtu\.be/|youtube\.com/embed/)"
-        r"([a-zA-Z0-9_-]{11})"
-    )
-
-    match = re.search(youtube_regex, cleaned)
-    if match:
-        video_id = match.group(4)
-        return f"https://www.youtube.com/watch?v={video_id}"
-
-    return cleaned
-
-
-# --- UI Streamlit ---
-url_input = st.text_input("Masukkan Link YouTube:")
-
-if st.button("Proses Video"):
-    # Pakai fungsi pembersih sebelum diproses yt-dlp
-    cleaned_url = clean_youtube_url(url_input)
-
-    if not cleaned_url:
-        st.error("Silakan masukkan URL YouTube yang valid.")
-    else:
-        ydl_opts = {
-            "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
-            "quiet": True,
-            "no_warnings": True,
-        }
-
-        try:
-            with st.spinner("Memproses info video..."):
-                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    info = ydl.extract_info(cleaned_url, download=False)
-                    st.success(f"Berhasil memuat: **{info.get('title')}**")
-
-        except Exception as e:
-            st.error(f"Gagal memproses: {e}")import streamlit as st
 import yt_dlp
 import os
 import time
 import glob
+import re
 from moviepy.video.io.ffmpeg_tools import ffmpeg_extract_subclip
 
+def clean_youtube_url(url: str) -> str:
+    """Membersihkan URL dari spasi, tanda kutip, dan mengambil format standar YouTube."""
+    if not url:
+        return ""
+    # Hapus spasi dan tanda kutip
+    cleaned = url.strip().strip("'\"").strip()
+    
+    # Ekstrak Video ID menggunakan Regex agar kebal dari error link aneh
+    youtube_regex = r"(https?://)?(www\.)?(youtube\.com/watch\?v=|youtu\.be/|youtube\.com/embed/)([a-zA-Z0-9_-]{11})"
+    match = re.search(youtube_regex, cleaned)
+    
+    if match:
+        video_id = match.group(4)
+        return f"https://www.youtube.com/watch?v={video_id}"
+    return cleaned
+
+# --- TAMPILAN WEBSITE ---
 st.set_page_config(page_title="Klip YouTube", page_icon="✂️")
 st.title("✂️ Aplikasi Klip YouTube Otomatis")
 st.write("Sistem otomatis memotong 30 detik bagian tengah video.")
 
-url = st.text_input("🔗 Paste Link YouTube di sini:")
+url_input = st.text_input("🔗 Paste Link YouTube di sini:")
 
 if st.button("Buat Klip Sekarang!"):
-    if url:
-        url = url.strip()
+    # 1. Bersihkan URL sebelum diproses
+    cleaned_url = clean_youtube_url(url_input)
+    
+    if not cleaned_url:
+        st.warning("Harap masukkan link YouTube yang valid terlebih dahulu!")
+    else:
         with st.spinner("Sedang mengunduh dan memotong video... Mohon tunggu!"):
             id_unik = str(int(time.time()))
             file_asli_tanpa_ext = f"video_asli_{id_unik}"
             file_hasil = f"hasil_{id_unik}.mp4"
             
-            # Taktik baru: Ambil format yang sudah utuh dari YouTube, jangan digabung manual
+            # Pengaturan yt-dlp
             ydl_opts = {
                 'format': 'best',
                 'outtmpl': f"{file_asli_tanpa_ext}.%(ext)s", 
@@ -131,21 +51,21 @@ if st.button("Buat Klip Sekarang!"):
             }
             
             try:
-                # 1. Proses Download
+                # 2. Proses Download Video
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    info = ydl.extract_info(url, download=True)
+                    info = ydl.extract_info(cleaned_url, download=True)
                     durasi_total = info.get('duration', 0)
-                    ext = info.get('ext', 'mp4') # Deteksi format asli (mp4/webm)
+                    ext = info.get('ext', 'mp4')
                 
                 file_asli = f"{file_asli_tanpa_ext}.{ext}"
                 
-                # 2. Cek apakah file berhasil diunduh dan tidak kosong
+                # 3. Pengecekan file
                 if not os.path.exists(file_asli) or os.path.getsize(file_asli) == 0:
                     st.error("❌ Gagal: File dari YouTube kosong atau diblokir.")
                 elif durasi_total == 0:
                     st.error("❌ Gagal membaca durasi. (Pastikan ini bukan video Live Stream).")
                 else:
-                    # 3. Hitung Waktu dan Potong
+                    # 4. Hitung Waktu dan Potong Video
                     waktu_mulai = max(0, (durasi_total // 2) - 15)
                     waktu_selesai = min(durasi_total, waktu_mulai + 30)
                     
@@ -153,7 +73,7 @@ if st.button("Buat Klip Sekarang!"):
                     
                     st.success("✅ Video berhasil dipotong!")
                     
-                    # 4. Tombol Download
+                    # 5. Tombol Download
                     with open(file_hasil, "rb") as file:
                         st.download_button(
                             label="⬇️ Download Video Hasil Klip", 
@@ -164,10 +84,10 @@ if st.button("Buat Klip Sekarang!"):
             except Exception as e:
                 st.error(f"❌ Gagal memproses: {e}")
             finally:
-                # 5. Bersihkan semua file sampah agar server tidak penuh
+                # 6. Bersihkan file sampah
                 if os.path.exists(file_hasil): 
-                    os.remove(file_hasil)
+                    try: os.remove(file_hasil)
+                    except: pass
                 for f in glob.glob(f"{file_asli_tanpa_ext}.*"):
-                    os.remove(f)
-    else:
-        st.warning("Harap masukkan link terlebih dahulu!")
+                    try: os.remove(f)
+                    except: pass
