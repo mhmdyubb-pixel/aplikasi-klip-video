@@ -1,93 +1,75 @@
 import streamlit as st
-import yt_dlp
 import os
 import time
-import glob
-import re
 from moviepy.video.io.ffmpeg_tools import ffmpeg_extract_subclip
 
-def clean_youtube_url(url: str) -> str:
-    """Membersihkan URL dari spasi, tanda kutip, dan mengambil format standar YouTube."""
-    if not url:
-        return ""
-    # Hapus spasi dan tanda kutip
-    cleaned = url.strip().strip("'\"").strip()
-    
-    # Ekstrak Video ID menggunakan Regex agar kebal dari error link aneh
-    youtube_regex = r"(https?://)?(www\.)?(youtube\.com/watch\?v=|youtu\.be/|youtube\.com/embed/)([a-zA-Z0-9_-]{11})"
-    match = re.search(youtube_regex, cleaned)
-    
-    if match:
-        video_id = match.group(4)
-        return f"https://www.youtube.com/watch?v={video_id}"
-    return cleaned
+st.set_page_config(page_title="Potong Video", page_icon="🎬")
+st.title("🎬 Aplikasi Potong Video Mandiri")
+st.write("Upload video Anda, tentukan detik pemotongan, dan download hasilnya.")
 
-# --- TAMPILAN WEBSITE ---
-st.set_page_config(page_title="Klip YouTube", page_icon="✂️")
-st.title("✂️ Aplikasi Klip YouTube Otomatis")
-st.write("Sistem otomatis memotong 30 detik bagian tengah video.")
+# 1. Fitur Upload Video
+uploaded_file = st.file_uploader("📂 Pilih file video dari HP/Laptop (MP4, MOV):", type=['mp4', 'mov'])
 
-url_input = st.text_input("🔗 Paste Link YouTube di sini:")
-
-if st.button("Buat Klip Sekarang!"):
-    # 1. Bersihkan URL sebelum diproses
-    cleaned_url = clean_youtube_url(url_input)
+if uploaded_file is not None:
+    st.success("✅ Video berhasil dimuat!")
     
-    if not cleaned_url:
-        st.warning("Harap masukkan link YouTube yang valid terlebih dahulu!")
-    else:
-        with st.spinner("Sedang mengunduh dan memotong video... Mohon tunggu!"):
-            id_unik = str(int(time.time()))
-            file_asli_tanpa_ext = f"video_asli_{id_unik}"
-            file_hasil = f"hasil_{id_unik}.mp4"
-            
-            # Pengaturan yt-dlp
-            ydl_opts = {
-                'format': 'best',
-                'outtmpl': f"{file_asli_tanpa_ext}.%(ext)s", 
-                'quiet': True,
-                'noplaylist': True,
-                'nocheckcertificate': True
-            }
-            
-            try:
-                # 2. Proses Download Video
-                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                    info = ydl.extract_info(cleaned_url, download=True)
-                    durasi_total = info.get('duration', 0)
-                    ext = info.get('ext', 'mp4')
+    # 2. Menampilkan video asli agar pengguna bisa memutar dan melihat durasinya
+    st.write("📺 **Tinjau Video Anda:**")
+    st.video(uploaded_file)
+    
+    st.divider() # Garis pemisah
+    
+    # 3. Pengaturan Waktu Potong
+    st.write("### ⏱️ Tentukan Waktu Potong")
+    st.write("*(Lihat durasi video di atas untuk menentukan detik yang pas)*")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        waktu_mulai = st.number_input("Mulai di detik ke:", min_value=0, value=0)
+    with col2:
+        waktu_selesai = st.number_input("Selesai di detik ke:", min_value=1, value=10)
+        
+    # 4. Tombol Eksekusi
+    if st.button("✂️ Potong Video Sekarang!"):
+        if waktu_mulai >= waktu_selesai:
+            st.error("❌ Waktu 'Selesai' harus lebih besar dari waktu 'Mulai'!")
+        else:
+            with st.spinner("Sedang memotong video... Mohon tunggu!"):
+                # Buat nama file sementara yang unik
+                id_unik = str(int(time.time()))
+                file_input = f"input_{id_unik}.mp4"
+                file_output = f"output_{id_unik}.mp4"
                 
-                file_asli = f"{file_asli_tanpa_ext}.{ext}"
-                
-                # 3. Pengecekan file
-                if not os.path.exists(file_asli) or os.path.getsize(file_asli) == 0:
-                    st.error("❌ Gagal: File dari YouTube kosong atau diblokir.")
-                elif durasi_total == 0:
-                    st.error("❌ Gagal membaca durasi. (Pastikan ini bukan video Live Stream).")
-                else:
-                    # 4. Hitung Waktu dan Potong Video
-                    waktu_mulai = max(0, (durasi_total // 2) - 15)
-                    waktu_selesai = min(durasi_total, waktu_mulai + 30)
+                try:
+                    # Simpan file yang diupload ke dalam server website
+                    with open(file_input, "wb") as f:
+                        f.write(uploaded_file.read())
+                        
+                    # Proses potong video pakai FFmpeg
+                    ffmpeg_extract_subclip(file_input, waktu_mulai, waktu_selesai, targetname=file_output)
                     
-                    ffmpeg_extract_subclip(file_asli, waktu_mulai, waktu_selesai, targetname=file_hasil)
+                    st.success(f"🎉 Berhasil! Video dipotong dari detik {waktu_mulai} ke {waktu_selesai}.")
                     
-                    st.success("✅ Video berhasil dipotong!")
+                    # Tampilkan hasil klip
+                    st.write("📺 **Hasil Potongan:**")
+                    st.video(file_output)
                     
-                    # 5. Tombol Download
-                    with open(file_hasil, "rb") as file:
+                    # Tombol Download
+                    with open(file_output, "rb") as f:
                         st.download_button(
-                            label="⬇️ Download Video Hasil Klip", 
-                            data=file.read(), 
-                            file_name=f"klip_youtube_{id_unik}.mp4", 
+                            label="⬇️ Download Hasil Klip",
+                            data=f.read(),
+                            file_name=f"klip_saya_{id_unik}.mp4",
                             mime="video/mp4"
                         )
-            except Exception as e:
-                st.error(f"❌ Gagal memproses: {e}")
-            finally:
-                # 6. Bersihkan file sampah
-                if os.path.exists(file_hasil): 
-                    try: os.remove(file_hasil)
-                    except: pass
-                for f in glob.glob(f"{file_asli_tanpa_ext}.*"):
-                    try: os.remove(f)
-                    except: pass
+                        
+                except Exception as e:
+                    st.error(f"❌ Terjadi kesalahan saat memproses: {e}")
+                finally:
+                    # Selalu bersihkan file agar server website tidak kepenuhan
+                    if os.path.exists(file_input): 
+                        try: os.remove(file_input) 
+                        except: pass
+                    if os.path.exists(file_output): 
+                        try: os.remove(file_output) 
+                        except: pass
