@@ -49,6 +49,57 @@ if st.button("Proses Video"):
                     st.success(f"Berhasil memuat: **{info.get('title')}**")
 
         except Exception as e:
+            st.error(f"Gagal memproses: {e}")import re
+import streamlit as st
+import yt_dlp
+
+
+def clean_youtube_url(url: str) -> str:
+    """Membersihkan URL dari spasi, tanda kutip, dan mengambil format standar YouTube."""
+    if not url:
+        return ""
+
+    # 1. Hapus spasi dan tanda kutip pembungkus
+    cleaned = url.strip().strip("'\"").strip()
+
+    # 2. Ekstrak Video ID 11 karakter menggunakan Regex
+    youtube_regex = (
+        r"(https?://)?(www\.)?"
+        r"(youtube\.com/watch\?v=|youtu\.be/|youtube\.com/embed/)"
+        r"([a-zA-Z0-9_-]{11})"
+    )
+
+    match = re.search(youtube_regex, cleaned)
+    if match:
+        video_id = match.group(4)
+        return f"https://www.youtube.com/watch?v={video_id}"
+
+    return cleaned
+
+
+# --- UI Streamlit ---
+url_input = st.text_input("Masukkan Link YouTube:")
+
+if st.button("Proses Video"):
+    # Pakai fungsi pembersih sebelum diproses yt-dlp
+    cleaned_url = clean_youtube_url(url_input)
+
+    if not cleaned_url:
+        st.error("Silakan masukkan URL YouTube yang valid.")
+    else:
+        ydl_opts = {
+            "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+            "quiet": True,
+            "no_warnings": True,
+        }
+
+        try:
+            with st.spinner("Memproses info video..."):
+                with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                    info = ydl.extract_info(cleaned_url, download=False)
+                    st.success(f"Berhasil memuat: **{info.get('title')}**")
+
+        except Exception as e:
             st.error(f"Gagal memproses: {e}")import streamlit as st
 import yt_dlp
 import os
